@@ -1,0 +1,6 @@
+[submodule "analog-sdk"]
+	path = analog-sdk
+	url = https://github.com/simon-wh/Analog-SDK.git
+[submodule "analog-plugin-c/includes/hidapi"]
+	path = analog-plugin-c/includes/hidapi
+	url = https://github.com/libusb/hidapi.git
