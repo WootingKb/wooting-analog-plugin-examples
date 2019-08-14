@@ -2,6 +2,8 @@
 #include "string.h"
 #include "hidapi.h"
 
+#pragma comment(lib, "userenv.lib")
+#pragma comment(lib, "WS2_32")
 
 #define ANALOG_BUFFER_SIZE 48
 #define WOOTING_ONE_VID 0x03EB
