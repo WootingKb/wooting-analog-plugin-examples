@@ -2,6 +2,7 @@
 #include "string.h"
 #include "hidapi.h"
 
+//These are required for linking to analog_sdk_common on Windows
 #pragma comment(lib, "userenv.lib")
 #pragma comment(lib, "WS2_32")
 
@@ -17,7 +18,7 @@ static unsigned char hid_read_buffer[ANALOG_BUFFER_SIZE];
 static char device_name[20];
 static char manufacturer_name[20];
 
-static ASDK_DeviceInfo dev_info;
+static WASDK_DeviceInfo dev_info;
 static bool initialised = false;
 
 const char* _name(){
@@ -33,7 +34,7 @@ static void wooting_keyboard_disconnected() {
     keyboard_handle = NULL;
 
     if (callback) {
-        callback(ASDK_DeviceEventType_Disconnected, &dev_info);
+        callback(WASDK_DeviceEventType_Disconnected, &dev_info);
     }
     initialised = false;
 }
@@ -120,7 +121,7 @@ static bool wooting_refresh_buffer() {
     }
 }
 
-int _read_full_buffer(uint16_t code_buffer[], float analog_buffer[], int len, ASDK_DeviceID device) {
+int _read_full_buffer(uint16_t code_buffer[], float analog_buffer[], int len, WASDK_DeviceID device) {
     if (!initialised)
         return (float)AnalogSDKResult_UnInitialized;
 
@@ -163,7 +164,7 @@ int _read_full_buffer(uint16_t code_buffer[], float analog_buffer[], int len, AS
     return items_written;
 }
 
-float read_analog(uint16_t code, ASDK_DeviceID device) {
+float read_analog(uint16_t code, WASDK_DeviceID device) {
     if (!initialised)
         return (float)AnalogSDKResult_UnInitialized;
 
@@ -189,7 +190,7 @@ float read_analog(uint16_t code, ASDK_DeviceID device) {
     return 0.0;
 }
 
-int _device_info(ASDK_DeviceInfo* buffer[], int len) {
+int _device_info(WASDK_DeviceInfo* buffer[], int len) {
     if (!initialised)
         return AnalogSDKResult_UnInitialized;
 
