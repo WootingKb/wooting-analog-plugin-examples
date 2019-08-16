@@ -18,7 +18,7 @@ static unsigned char hid_read_buffer[ANALOG_BUFFER_SIZE];
 static char device_name[20];
 static char manufacturer_name[20];
 
-static WASDK_DeviceInfo dev_info;
+static WootingAnalog_DeviceInfo dev_info;
 static bool initialised = false;
 
 const char* _name(){
@@ -34,7 +34,7 @@ static void wooting_keyboard_disconnected() {
     keyboard_handle = NULL;
 
     if (callback) {
-        callback(WASDK_DeviceEventType_Disconnected, &dev_info);
+        callback(WootingAnalog_DeviceEventType_Disconnected, &dev_info);
     }
     initialised = false;
 }
@@ -91,9 +91,9 @@ static bool wooting_find_keyboard() {
     return keyboard_found;
 }
 
-AnalogSDKResult initialise() {
+WootingAnalogResult initialise() {
     if (initialised)
-        return AnalogSDKResult_Ok;
+        return WootingAnalogResult_Ok;
 
     return initialised = wooting_find_keyboard();
 }
@@ -121,15 +121,15 @@ static bool wooting_refresh_buffer() {
     }
 }
 
-int _read_full_buffer(uint16_t code_buffer[], float analog_buffer[], int len, WASDK_DeviceID device) {
+int _read_full_buffer(uint16_t code_buffer[], float analog_buffer[], int len, WootingAnalog_DeviceID device) {
     if (!initialised)
-        return (float)AnalogSDKResult_UnInitialized;
+        return (float)WootingAnalogResult_UnInitialized;
 
     if (device != 0 && dev_info.device_id != device)
-        return (float)AnalogSDKResult_NoDevices;
+        return (float)WootingAnalogResult_NoDevices;
 
     if (!wooting_refresh_buffer())
-        return (float)AnalogSDKResult_DeviceDisconnected;
+        return (float)WootingAnalogResult_DeviceDisconnected;
 
 
     int items_written = 0;
@@ -164,15 +164,15 @@ int _read_full_buffer(uint16_t code_buffer[], float analog_buffer[], int len, WA
     return items_written;
 }
 
-float read_analog(uint16_t code, WASDK_DeviceID device) {
+float read_analog(uint16_t code, WootingAnalog_DeviceID device) {
     if (!initialised)
-        return (float)AnalogSDKResult_UnInitialized;
+        return (float)WootingAnalogResult_UnInitialized;
 
     if (device != 0 && dev_info.device_id != device)
-        return (float)AnalogSDKResult_NoDevices;
+        return (float)WootingAnalogResult_NoDevices;
 
     if (!wooting_refresh_buffer())
-        return (float)AnalogSDKResult_DeviceDisconnected;
+        return (float)WootingAnalogResult_DeviceDisconnected;
 
 
 
@@ -190,20 +190,20 @@ float read_analog(uint16_t code, WASDK_DeviceID device) {
     return 0.0;
 }
 
-int _device_info(WASDK_DeviceInfo* buffer[], int len) {
+int _device_info(WootingAnalog_DeviceInfo* buffer[], int len) {
     if (!initialised)
-        return AnalogSDKResult_UnInitialized;
+        return WootingAnalogResult_UnInitialized;
 
     buffer[0] = &dev_info;
     return 1;
 }
 
-AnalogSDKResult set_device_event_cb(device_event cb) {
+WootingAnalogResult set_device_event_cb(device_event cb) {
     callback = cb;
-    return AnalogSDKResult_Ok;
+    return WootingAnalogResult_Ok;
 }
 
-AnalogSDKResult clear_device_event_cb() {
+WootingAnalogResult clear_device_event_cb() {
     callback = NULL;
-    return AnalogSDKResult_Ok;
+    return WootingAnalogResult_Ok;
 }
