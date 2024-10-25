@@ -1,10 +1,14 @@
+#define ANALOGSDK_EXPORTS
+
 #include "plugin.h"
 #include "string.h"
 #include "hidapi.h"
 
-//These are required for linking to analog_sdk_common on Windows
+//These are required for linking to wooting_analog_plugin_dev on Windows
 #pragma comment(lib, "userenv.lib")
-#pragma comment(lib, "WS2_32")
+#pragma comment(lib, "WS2_32.lib")
+#pragma comment(lib, "Bcrypt.lib")
+#pragma comment(lib, "ntdll.lib")
 
 #define ANALOG_BUFFER_SIZE 48
 #define WOOTING_ONE_VID 0x03EB
@@ -12,16 +16,17 @@
 #define WOOTING_ONE_ANALOG_USAGE_PAGE 0x1338
 
 static hid_device* keyboard_handle = NULL;
+static void const* callback_data = NULL;
 static device_event callback = NULL;
 static unsigned char hid_read_buffer[ANALOG_BUFFER_SIZE];
 
 static char device_name[20];
 static char manufacturer_name[20];
 
-static WootingAnalog_DeviceInfo dev_info;
+static WootingAnalog_DeviceInfo_FFI dev_info;
 static bool initialised = false;
 
-const char* _name(){
+const char* name(){
     return "C Test Plugin";
 }
 
@@ -34,7 +39,7 @@ static void wooting_keyboard_disconnected() {
     keyboard_handle = NULL;
 
     if (callback) {
-        callback(WootingAnalog_DeviceEventType_Disconnected, &dev_info);
+        callback(callback_data, WootingAnalog_DeviceEventType_Disconnected, &dev_info);
     }
     initialised = false;
 }
@@ -91,9 +96,12 @@ static bool wooting_find_keyboard() {
     return keyboard_found;
 }
 
-WootingAnalogResult initialise() {
+WootingAnalogResult initialise(void const* cb_data, device_event cb) {
     if (initialised)
         return WootingAnalogResult_Ok;
+
+    callback_data = cb_data;
+    callback = cb;
 
     return initialised = wooting_find_keyboard();
 }
@@ -121,7 +129,7 @@ static bool wooting_refresh_buffer() {
     }
 }
 
-int _read_full_buffer(uint16_t code_buffer[], float analog_buffer[], int len, WootingAnalog_DeviceID device) {
+int read_full_buffer(uint16_t code_buffer[], float analog_buffer[], int len, WootingAnalog_DeviceID device) {
     if (!initialised)
         return (float)WootingAnalogResult_UnInitialized;
 
@@ -190,20 +198,10 @@ float read_analog(uint16_t code, WootingAnalog_DeviceID device) {
     return 0.0;
 }
 
-int _device_info(WootingAnalog_DeviceInfo* buffer[], int len) {
+int device_info(WootingAnalog_DeviceInfo_FFI* buffer[], int len) {
     if (!initialised)
         return WootingAnalogResult_UnInitialized;
 
     buffer[0] = &dev_info;
     return 1;
-}
-
-WootingAnalogResult set_device_event_cb(device_event cb) {
-    callback = cb;
-    return WootingAnalogResult_Ok;
-}
-
-WootingAnalogResult clear_device_event_cb() {
-    callback = NULL;
-    return WootingAnalogResult_Ok;
 }
