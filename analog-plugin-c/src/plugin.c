@@ -116,7 +116,10 @@ static bool wooting_refresh_buffer() {
         }
     }
 
-    int hid_res = hid_read_timeout(keyboard_handle, hid_read_buffer, ANALOG_BUFFER_SIZE, 0);
+    int hid_res;
+    do {
+      hid_res = hid_read_timeout(keyboard_handle, hid_read_buffer, ANALOG_BUFFER_SIZE, 0);
+    } while (hid_res > 0);
 
     // If the read response is -1 the keyboard is disconnected
     if (hid_res == -1) {
