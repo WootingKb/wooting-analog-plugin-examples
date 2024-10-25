@@ -11,17 +11,16 @@
 #pragma comment(lib, "ntdll.lib")
 
 #define ANALOG_BUFFER_SIZE 48
-#define WOOTING_ONE_VID 0x03EB
-#define WOOTING_ONE_PID 0xFF01
-#define WOOTING_ONE_ANALOG_USAGE_PAGE 0x1338
+#define WOOTING_VID 0x31E3
+#define WOOTING_ANALOG_USAGE_PAGE 0xFF54
 
 static hid_device* keyboard_handle = NULL;
 static void const* callback_data = NULL;
 static device_event callback = NULL;
 static unsigned char hid_read_buffer[ANALOG_BUFFER_SIZE];
 
-static char device_name[20];
-static char manufacturer_name[20];
+static char device_name[64];
+static char manufacturer_name[64];
 
 static WootingAnalog_DeviceInfo_FFI dev_info;
 static bool initialised = false;
@@ -45,7 +44,7 @@ static void wooting_keyboard_disconnected() {
 }
 
 static bool wooting_find_keyboard() {
-    struct hid_device_info* hid_info = hid_enumerate(WOOTING_ONE_VID, WOOTING_ONE_PID);
+    struct hid_device_info* hid_info = hid_enumerate(WOOTING_VID, 0);
 
     if (hid_info == NULL) {
         return false;
@@ -155,11 +154,7 @@ int read_full_buffer(uint16_t code_buffer[], float analog_buffer[], int len, Woo
         if (analog_value > 0) {
             code_buffer[items_written] = code;
 
-            // Cap out values to a maximum
-            if (analog_value > 225) {
-                analog_value = 255;
-            }
-            analog_buffer[items_written] = (float)analog_value / 255.0;
+            analog_buffer[items_written] = (float)analog_value / 255.0f;
 
             items_written++;
         }
@@ -187,15 +182,11 @@ float read_analog(uint16_t code, WootingAnalog_DeviceID device) {
     for (int i = 0; i < ANALOG_BUFFER_SIZE && hid_read_buffer[i+2] > 0; i += 3) {
         uint16_t read_code = (hid_read_buffer[i] << 8) | hid_read_buffer[i+1];
         if (read_code == code) {
-            // Cap out values to a maximum
-            float val = ((float)hid_read_buffer[i+2] * 1.2) / (float)255;
-            if (val > 1.0)
-                val = 1.0;
-            return val;
+            return (float)hid_read_buffer[i + 2] / 255.0f;
         }
     }
 
-    return 0.0;
+    return 0.0f;
 }
 
 int device_info(WootingAnalog_DeviceInfo_FFI* buffer[], int len) {
