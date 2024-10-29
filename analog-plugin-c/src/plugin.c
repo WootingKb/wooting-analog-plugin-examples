@@ -84,8 +84,8 @@ static bool wooting_find_keyboard() {
         dev_info.manufacturer_name = manufacturer_name;
         char serial[40];
         sprintf(serial, "%ls", hid_info->serial_number);
-
         dev_info.device_id = generate_device_id(serial, hid_info->vendor_id, hid_info->product_id);
+        dev_info.device_type = WootingAnalog_DeviceType_Keyboard;
     } else {
         printf("No compatible devices were found or could be opened\n");
     }
