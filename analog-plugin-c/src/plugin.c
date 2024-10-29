@@ -198,7 +198,7 @@ float read_analog(uint16_t code, WootingAnalog_DeviceID device) {
     return 0.0f;
 }
 
-int device_info(WootingAnalog_DeviceInfo_FFI* buffer[], int len) {
+int device_info(const WootingAnalog_DeviceInfo_FFI* buffer[], int len) {
     if (!initialised)
         return WootingAnalogResult_UnInitialized;
 
