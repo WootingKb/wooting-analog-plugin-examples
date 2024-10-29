@@ -13,7 +13,7 @@ if(NOT TARGET hidapi)
     message(FATAL_ERROR "This app doesn't do anything without HIDAPI - fix the errors above!")
 endif()
 
-execute_process(COMMAND cargo make --cwd ${CMAKE_CURRENT_SOURCE_DIR}/../analog-sdk/wooting-analog-plugin-dev)
+execute_process(COMMAND cargo build --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/../analog-sdk/wooting-analog-plugin-dev/Cargo.toml)
 add_library(analog_plugin_c SHARED src/plugin.c ${plugn_includes}/plugin.h)
 target_link_directories(analog_plugin_c PRIVATE ${analog_sdk_path}/target/debug)
 target_include_directories(analog_plugin_c PRIVATE ${plugn_includes})
