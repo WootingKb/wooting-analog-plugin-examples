@@ -33,11 +33,11 @@ bool is_initialised() {
     return initialised;
 }
 
-static void wooting_keyboard_disconnected() {
+static void wooting_keyboard_disconnected(bool trigger_callback) {
     hid_close(keyboard_handle);
     keyboard_handle = NULL;
 
-    if (callback) {
+    if (callback && trigger_callback) {
         callback(callback_data, WootingAnalog_DeviceEventType_Disconnected, &dev_info);
     }
     initialised = false;
@@ -47,29 +47,26 @@ static bool wooting_find_keyboard() {
     struct hid_device_info* hid_info = hid_enumerate(WOOTING_VID, 0);
 
     if (hid_info == NULL) {
+        printf("No Wooting devices found\n");
         return false;
     }
 
     // The amount of interfaces is variable, so we need to look for the analog interface
     // In the Wooting one keyboard the analog interface is always the highest number
     struct hid_device_info* hid_info_walker = hid_info;
-    uint8_t interfaceNr = 0;
-    while (hid_info_walker) {
-        //printf("%d\n", hid_info_walker->interface_number);
-        if (hid_info_walker->interface_number > interfaceNr) {
-            interfaceNr = hid_info_walker->interface_number;
-        }
-        hid_info_walker = hid_info_walker->next;
-    }
 
     bool keyboard_found = false;
-    // Reset walker to top and search for the interface number
-    hid_info_walker = hid_info;
+
     while (hid_info_walker) {
-        if (hid_info_walker->interface_number == interfaceNr) {
+        // printf("Usage Page: %x\n", hid_info_walker->usage_page);
+        if (hid_info_walker->usage_page == WOOTING_ANALOG_USAGE_PAGE) {
             keyboard_handle = hid_open_path(hid_info_walker->path);
+
             if (keyboard_handle) {
                 keyboard_found = true;
+            } else {
+                const wchar_t* error = hid_error(NULL);
+                printf("Error opening device, %ls|%ls. Error: %ls\n", hid_info_walker->manufacturer_string, hid_info_walker->product_string, error);
             }
 
             break;
@@ -89,6 +86,8 @@ static bool wooting_find_keyboard() {
         sprintf(serial, "%ls", hid_info->serial_number);
 
         dev_info.device_id = generate_device_id(serial, hid_info->vendor_id, hid_info->product_id);
+    } else {
+        printf("No compatible devices were found or could be opened\n");
     }
 
     hid_free_enumeration(hid_info);
@@ -102,11 +101,18 @@ WootingAnalogResult initialise(void const* cb_data, device_event cb) {
     callback_data = cb_data;
     callback = cb;
 
-    return initialised = wooting_find_keyboard();
+    initialised = wooting_find_keyboard();
+
+    // Return number of devices connected. If initialisation failed, then a negative error code should be returned based off of the WootingAnalogResult enum
+    return initialised ? 1 : 0;
 }
 
 void unload() {
-
+    // Cleanup
+    if (initialised && keyboard_handle) {
+       wooting_keyboard_disconnected(false);
+    }
+    hid_exit();
 }
 
 static bool wooting_refresh_buffer() {
@@ -123,7 +129,7 @@ static bool wooting_refresh_buffer() {
 
     // If the read response is -1 the keyboard is disconnected
     if (hid_res == -1) {
-        wooting_keyboard_disconnected();
+        wooting_keyboard_disconnected(true);
         return false;
     }
     else {
