@@ -1,27 +1,31 @@
+#define ANALOGSDK_EXPORTS
+
 #include "plugin.h"
 #include "string.h"
 #include "hidapi.h"
 
-//These are required for linking to analog_sdk_common on Windows
+//These are required for linking to wooting_analog_plugin_dev on Windows
 #pragma comment(lib, "userenv.lib")
-#pragma comment(lib, "WS2_32")
+#pragma comment(lib, "WS2_32.lib")
+#pragma comment(lib, "Bcrypt.lib")
+#pragma comment(lib, "ntdll.lib")
 
 #define ANALOG_BUFFER_SIZE 48
-#define WOOTING_ONE_VID 0x03EB
-#define WOOTING_ONE_PID 0xFF01
-#define WOOTING_ONE_ANALOG_USAGE_PAGE 0x1338
+#define WOOTING_VID 0x31E3
+#define WOOTING_ANALOG_USAGE_PAGE 0xFF54
 
 static hid_device* keyboard_handle = NULL;
+static void const* callback_data = NULL;
 static device_event callback = NULL;
 static unsigned char hid_read_buffer[ANALOG_BUFFER_SIZE];
 
-static char device_name[20];
-static char manufacturer_name[20];
+static char device_name[64];
+static char manufacturer_name[64];
 
-static WootingAnalog_DeviceInfo dev_info;
+static WootingAnalog_DeviceInfo_FFI dev_info;
 static bool initialised = false;
 
-const char* _name(){
+const char* name(){
     return "C Test Plugin";
 }
 
@@ -29,43 +33,40 @@ bool is_initialised() {
     return initialised;
 }
 
-static void wooting_keyboard_disconnected() {
+static void wooting_keyboard_disconnected(bool trigger_callback) {
     hid_close(keyboard_handle);
     keyboard_handle = NULL;
 
-    if (callback) {
-        callback(WootingAnalog_DeviceEventType_Disconnected, &dev_info);
+    if (callback && trigger_callback) {
+        callback(callback_data, WootingAnalog_DeviceEventType_Disconnected, &dev_info);
     }
     initialised = false;
 }
 
 static bool wooting_find_keyboard() {
-    struct hid_device_info* hid_info = hid_enumerate(WOOTING_ONE_VID, WOOTING_ONE_PID);
+    struct hid_device_info* hid_info = hid_enumerate(WOOTING_VID, 0);
 
     if (hid_info == NULL) {
+        printf("No Wooting devices found\n");
         return false;
     }
 
     // The amount of interfaces is variable, so we need to look for the analog interface
     // In the Wooting one keyboard the analog interface is always the highest number
     struct hid_device_info* hid_info_walker = hid_info;
-    uint8_t interfaceNr = 0;
-    while (hid_info_walker) {
-        //printf("%d\n", hid_info_walker->interface_number);
-        if (hid_info_walker->interface_number > interfaceNr) {
-            interfaceNr = hid_info_walker->interface_number;
-        }
-        hid_info_walker = hid_info_walker->next;
-    }
 
     bool keyboard_found = false;
-    // Reset walker to top and search for the interface number
-    hid_info_walker = hid_info;
+
     while (hid_info_walker) {
-        if (hid_info_walker->interface_number == interfaceNr) {
+        // printf("Usage Page: %x\n", hid_info_walker->usage_page);
+        if (hid_info_walker->usage_page == WOOTING_ANALOG_USAGE_PAGE) {
             keyboard_handle = hid_open_path(hid_info_walker->path);
+
             if (keyboard_handle) {
                 keyboard_found = true;
+            } else {
+                const wchar_t* error = hid_error(NULL);
+                printf("Error opening device, %ls|%ls. Error: %ls\n", hid_info_walker->manufacturer_string, hid_info_walker->product_string, error);
             }
 
             break;
@@ -83,23 +84,35 @@ static bool wooting_find_keyboard() {
         dev_info.manufacturer_name = manufacturer_name;
         char serial[40];
         sprintf(serial, "%ls", hid_info->serial_number);
-
         dev_info.device_id = generate_device_id(serial, hid_info->vendor_id, hid_info->product_id);
+        dev_info.device_type = WootingAnalog_DeviceType_Keyboard;
+    } else {
+        printf("No compatible devices were found or could be opened\n");
     }
 
     hid_free_enumeration(hid_info);
     return keyboard_found;
 }
 
-WootingAnalogResult initialise() {
+WootingAnalogResult initialise(void const* cb_data, device_event cb) {
     if (initialised)
         return WootingAnalogResult_Ok;
 
-    return initialised = wooting_find_keyboard();
+    callback_data = cb_data;
+    callback = cb;
+
+    initialised = wooting_find_keyboard();
+
+    // Return number of devices connected. If initialisation failed, then a negative error code should be returned based off of the WootingAnalogResult enum
+    return initialised ? 1 : 0;
 }
 
 void unload() {
-
+    // Cleanup
+    if (initialised && keyboard_handle) {
+       wooting_keyboard_disconnected(false);
+    }
+    hid_exit();
 }
 
 static bool wooting_refresh_buffer() {
@@ -109,11 +122,14 @@ static bool wooting_refresh_buffer() {
         }
     }
 
-    int hid_res = hid_read_timeout(keyboard_handle, hid_read_buffer, ANALOG_BUFFER_SIZE, 0);
+    int hid_res;
+    do {
+      hid_res = hid_read_timeout(keyboard_handle, hid_read_buffer, ANALOG_BUFFER_SIZE, 0);
+    } while (hid_res > 0);
 
     // If the read response is -1 the keyboard is disconnected
     if (hid_res == -1) {
-        wooting_keyboard_disconnected();
+        wooting_keyboard_disconnected(true);
         return false;
     }
     else {
@@ -121,7 +137,7 @@ static bool wooting_refresh_buffer() {
     }
 }
 
-int _read_full_buffer(uint16_t code_buffer[], float analog_buffer[], int len, WootingAnalog_DeviceID device) {
+int read_full_buffer(uint16_t code_buffer[], float analog_buffer[], int len, WootingAnalog_DeviceID device) {
     if (!initialised)
         return (float)WootingAnalogResult_UnInitialized;
 
@@ -147,11 +163,7 @@ int _read_full_buffer(uint16_t code_buffer[], float analog_buffer[], int len, Wo
         if (analog_value > 0) {
             code_buffer[items_written] = code;
 
-            // Cap out values to a maximum
-            if (analog_value > 225) {
-                analog_value = 255;
-            }
-            analog_buffer[items_written] = (float)analog_value / 255.0;
+            analog_buffer[items_written] = (float)analog_value / 255.0f;
 
             items_written++;
         }
@@ -179,31 +191,17 @@ float read_analog(uint16_t code, WootingAnalog_DeviceID device) {
     for (int i = 0; i < ANALOG_BUFFER_SIZE && hid_read_buffer[i+2] > 0; i += 3) {
         uint16_t read_code = (hid_read_buffer[i] << 8) | hid_read_buffer[i+1];
         if (read_code == code) {
-            // Cap out values to a maximum
-            float val = ((float)hid_read_buffer[i+2] * 1.2) / (float)255;
-            if (val > 1.0)
-                val = 1.0;
-            return val;
+            return (float)hid_read_buffer[i + 2] / 255.0f;
         }
     }
 
-    return 0.0;
+    return 0.0f;
 }
 
-int _device_info(WootingAnalog_DeviceInfo* buffer[], int len) {
+int device_info(const WootingAnalog_DeviceInfo_FFI* buffer[], int len) {
     if (!initialised)
         return WootingAnalogResult_UnInitialized;
 
     buffer[0] = &dev_info;
     return 1;
-}
-
-WootingAnalogResult set_device_event_cb(device_event cb) {
-    callback = cb;
-    return WootingAnalogResult_Ok;
-}
-
-WootingAnalogResult clear_device_event_cb() {
-    callback = NULL;
-    return WootingAnalogResult_Ok;
 }
